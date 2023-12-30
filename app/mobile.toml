@@ -1,0 +1,5 @@
+[app]
+name = "rpi_clock"
+stylized-name = "RPi Clock"
+domain = "example.com"
+template-pack = "winit"

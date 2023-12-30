@@ -1,0 +1,66 @@
+FROM debian:bullseye as cross-base
+ARG DEBIAN_FRONTEND=noninteractive
+
+COPY common.sh lib.sh /
+RUN /common.sh
+
+COPY cmake.sh /
+RUN /cmake.sh
+
+COPY xargo.sh /
+RUN /xargo.sh
+
+FROM cross-base as build
+
+RUN apt-get update && apt-get install --assume-yes --no-install-recommends \
+    g++-aarch64-linux-gnu \
+    libc6-dev-arm64-cross
+
+# Adding my own dependencies
+RUN dpkg --add-architecture arm64 && \
+    apt-get update && \
+    apt-get install --assume-yes --no-install-recommends \
+    libglib2.0-dev:arm64 \
+    libgtk-3-dev:arm64
+
+RUN apt-get install --assume-yes --no-install-recommends \
+    libsoup2.4-dev \
+    libjavascriptcoregtk-4.0-dev
+
+RUN apt-get install --assume-yes --no-install-recommends \
+    libwebkit2gtk-4.0-dev
+
+COPY deny-debian-packages.sh /
+RUN TARGET_ARCH=arm64 /deny-debian-packages.sh \
+    binutils \
+    binutils-aarch64-linux-gnu
+
+# COPY qemu.sh /
+# RUN /qemu.sh aarch64 softmmu
+
+# COPY dropbear.sh /
+# RUN /dropbear.sh
+
+# COPY linux-image.sh /
+# RUN /linux-image.sh aarch64
+
+# COPY linux-runner base-runner.sh /
+COPY toolchain.cmake /opt/toolchain.cmake
+
+ENV CROSS_TOOLCHAIN_PREFIX=aarch64-linux-gnu-
+ENV CROSS_SYSROOT=/usr/aarch64-linux-gnu
+ENV CROSS_TARGET_RUNNER="/linux-runner aarch64"
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER="$CROSS_TOOLCHAIN_PREFIX"gcc \
+    CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUNNER="$CROSS_TARGET_RUNNER" \
+    AR_aarch64_unknown_linux_gnu="$CROSS_TOOLCHAIN_PREFIX"ar \
+    CC_aarch64_unknown_linux_gnu="$CROSS_TOOLCHAIN_PREFIX"gcc \
+    CXX_aarch64_unknown_linux_gnu="$CROSS_TOOLCHAIN_PREFIX"g++ \
+    CMAKE_TOOLCHAIN_FILE_aarch64_unknown_linux_gnu=/opt/toolchain.cmake \
+    BINDGEN_EXTRA_CLANG_ARGS_aarch64_unknown_linux_gnu="--sysroot=$CROSS_SYSROOT" \
+    QEMU_LD_PREFIX="$CROSS_SYSROOT" \
+    RUST_TEST_THREADS=1 \
+    PKG_CONFIG_PATH="/usr/lib/aarch64-linux-gnu/pkgconfig/:${PKG_CONFIG_PATH}" \
+    CROSS_CMAKE_SYSTEM_NAME=Linux \
+    CROSS_CMAKE_SYSTEM_PROCESSOR=aarch64 \
+    CROSS_CMAKE_CRT=gnu \
+    CROSS_CMAKE_OBJECT_FLAGS="-ffunction-sections -fdata-sections -fPIC"
